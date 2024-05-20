@@ -16,6 +16,18 @@ public class CSharpRefiner : CommonLanguageRefiner, ILanguageRefiner
         return Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
+            TransformNamespaceToPascalCase(generatedCode);
+            var reservedNamesProvider = new JavaReservedNamesProvider();
+            CorrectNames(generatedCode, s =>
+            {
+                if (s.Contains('_', StringComparison.OrdinalIgnoreCase) &&
+                     s.ToPascalCase(UnderscoreArray) is string refinedName &&
+                    !reservedNamesProvider.ReservedNames.Contains(s) &&
+                    !reservedNamesProvider.ReservedNames.Contains(refinedName))
+                    return refinedName;
+                else
+                    return s;
+            });
             AddPrimaryErrorMessage(generatedCode,
                 "Message",
                 () => new CodeType { Name = "string", IsNullable = false, IsExternal = true },
@@ -198,6 +210,19 @@ public class CSharpRefiner : CommonLanguageRefiner, ILanguageRefiner
         if (current is CodeNamespace currentNamespace)
             currentNamespace.Name = currentNamespace.Name.Split('.').Select(static x => x.ToFirstCharacterUpperCase()).Aggregate(static (x, y) => $"{x}.{y}");
         CrawlTree(current, CapitalizeNamespacesFirstLetters);
+    }
+    protected static void TransformNamespaceToPascalCase(CodeElement currentElement)
+    {
+        if (currentElement is CodeNamespace codeNamespace)
+        {
+            if (!string.IsNullOrEmpty(codeNamespace.Name))
+                codeNamespace.Name = codeNamespace.Name
+                    .Split('.')
+                    .Select(x => x.ToPascalCase(UnderscoreArray))
+                    .Aggregate((x, y) => $"{x}.{y}");
+
+            CrawlTree(currentElement, TransformNamespaceToPascalCase);
+        }
     }
     protected static void AddAsyncSuffix(CodeElement currentElement)
     {
